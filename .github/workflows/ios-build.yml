@@ -1,0 +1,39 @@
+name: Build experimental iPad runner
+on:
+  push:
+    paths: ['.github/workflows/ios-build.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Fetch pinned experimental source
+        uses: actions/checkout@v4
+        with:
+          repository: Un1q32/Butterscotch
+          ref: 6a453c7930430d4ec5847d4c11c13f52fb16d1a6
+      - name: Build arm64 with the installed Apple SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build compat/tmp
+          cat > build/ipad-cc <<'EOF'
+          #!/bin/sh
+          exec xcrun --sdk iphoneos clang -target arm64-apple-ios15.0 -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" "$@"
+          EOF
+          chmod +x build/ipad-cc
+          /usr/libexec/PlistBuddy -c 'Set :MinimumOSVersion 15.0' artifacts/ios/assets/Info.plist
+          make -j3 CC="$PWD/build/ipad-cc" VIDEO_BACKEND=none CFLAGS='-O2 -Wno-deprecated-declarations'
+          test -s build/butterscotch.ipa
+          xcrun lipo -info build/butterscotch
+          unzip -t build/butterscotch.ipa
+      - name: Upload experimental IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: iPad-runner-experimental
+          path: build/butterscotch.ipa
+          if-no-files-found: error
+
